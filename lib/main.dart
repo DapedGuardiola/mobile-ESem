@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
-import 'services/api_service.dart';
+import 'screens/auth_choice_screen.dart';
+import 'screens/landing_page.dart';
+import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
+import 'screens/dashboard_screen.dart';
+
+
 
 void main() {
   runApp(const MyApp());
@@ -11,34 +17,16 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: ApiTestScreen(),
-    );
-  }
-}
+      debugShowCheckedModeBanner: false,
+      initialRoute: "/",
+      routes: {
+        "/": (context) => const LandingPageScreen(),
+        "/auth": (context) => const AuthChoiceScreen(),
+        "/login": (context) => const LoginScreen(),
+        "/register": (context) => const RegisterScreen(),
+        "/dashboard": (context) => const DashboardScreen(),
+      },
 
-class ApiTestScreen extends StatelessWidget {
-  final api = ApiService();
-
-  ApiTestScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Test API")),
-      body: Center(
-        child: FutureBuilder(
-          future: api.ping(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const CircularProgressIndicator();
-            }
-            if (snapshot.hasError) {
-              return Text("Error: ${snapshot.error}");
-            }
-            return Text("Respon: ${snapshot.data}");
-          },
-        ),
-      ),
     );
   }
 }
