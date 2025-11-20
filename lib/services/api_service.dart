@@ -2,16 +2,30 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = "http://127.0.0.1:8000/api";
+  static const String baseUrl = "http://10.0.2.2:8000/api";
 
-  Future<String> ping() async {
-    final response = await http.get(Uri.parse("$baseUrl/ping"));
+  static Future<http.Response> getRequest(String endpoint) {
+    return http.get(Uri.parse("$baseUrl$endpoint"));
+  }
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      return data['message'];
-    } else {
-      throw Exception("Gagal terhubung ke API");
-    }
+
+  static Future<http.Response> postRequest(String endpoint, Map data) {
+  return http.post(
+    Uri.parse("$baseUrl$endpoint"),
+    headers: {
+      "Content-Type": "application/json", // pakai JSON
+    },
+    body: jsonEncode(data), // encode Map ke JSON string
+  );
+}
+
+  static Future<http.Response> postAuth(String endpoint, Map data, String token) {
+    return http.post(
+      Uri.parse("$baseUrl$endpoint"),
+      headers: {
+        "Authorization": "Bearer $token",
+      },
+      body: data,
+    );
   }
 }
