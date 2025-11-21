@@ -28,4 +28,12 @@ class ApiService {
       body: data,
     );
   }
+  static Future<http.Response> getAuth(String endpoint, String token) {
+    return http.get(
+      Uri.parse("$baseUrl$endpoint"),
+      headers: {
+        "Authorization": "Bearer $token",
+      },
+    );
+  }
 }

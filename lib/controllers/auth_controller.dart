@@ -14,4 +14,9 @@ class AuthController {
     final response = await ApiService.postRequest("/register", data);
     return jsonDecode(response.body);
   }
+  
+  Future<Map> getUser(String token) async{
+    final response = await ApiService.getAuth("/user",token);
+    return jsonDecode(response.body);
+  }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../controllers/auth_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool isLoading = false;
 
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', token);
+  }
+
   void login() async {
     setState(() {
       isLoading = true;
@@ -26,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return; // jika widget sudah hilang, hentikan eksekusi
 
       if (result.containsKey('token')) {
+        await saveToken(result['token']);
         // login berhasil
         ScaffoldMessenger.of(
           context,
@@ -44,10 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
     }
-    setState(() {
-      isLoading = false;
-    });
   }
 
   @override
@@ -127,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         // TODO: Login Logic
-                       login();
+                        login();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF9DD79D),

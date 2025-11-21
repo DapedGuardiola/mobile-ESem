@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../controllers/auth_controller.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,10 +17,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController alamatController = TextEditingController();
   final TextEditingController teleponController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-
+  final AuthController authController = AuthController();
   // Role dropdown
   String? selectedRole;
 
+  bool isLoading = false;
+    void register() async {
+      setState(() {
+        isLoading = true;
+      });
+      Map<String, dynamic> data = {
+        "role_id" : 1,
+        "email": emailController.text,
+        "password": passwordController.text,
+        "user_name": namaController.text,
+        "address": alamatController.text,
+        "user_phone": teleponController.text,
+      };
+      try {
+        Map result = await authController.register(data);
+        if (!mounted) return;
+        if (result.containsKey('token')) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Register berhasil!')));
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/dashboard',
+            (route) => false,
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result['message'] ?? 'Register gagal')),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error:$e')),);
+      }
+      finally{
+        setState(() {
+          isLoading = false;
+        });
+      }
+      
+    }
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -75,10 +118,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         fillColor: Colors.white,
                       ),
                       items: const [
-                        DropdownMenuItem(
-                          value: "admin",
-                          child: Text("Admin"),
-                        ),
+                        DropdownMenuItem(value: "admin", child: Text("Admin")),
                         DropdownMenuItem(
                           value: "panitia",
                           child: Text("Panitia"),
@@ -189,12 +229,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
-                          print("Role: $selectedRole");
-                          print("Email: ${emailController.text}");
-                          print("Nama: ${namaController.text}");
-                          print("Alamat: ${alamatController.text}");
-                          print("Telepon: ${teleponController.text}");
-                          print("Password: ${passwordController.text}");
+                          register();
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF9DD79D),
@@ -205,10 +240,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         child: const Text(
                           "Register",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                          ),
+                          style: TextStyle(fontSize: 16, color: Colors.white),
                         ),
                       ),
                     ),
