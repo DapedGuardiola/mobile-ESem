@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data';
+import '../controllers/auth_controller.dart';
+import '../services/api_service.dart';
+import 'dart:convert';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -10,15 +13,16 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-
 class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController namaController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController alamatController = TextEditingController();
   final TextEditingController teleponController = TextEditingController();
 
+  final AuthController authController = AuthController();
+  
   bool isLoadingProfile = true;
-  Uint8List? profileImageBytes; // Bytes untuk foto lokal
+  Uint8List? profileImageBytes;
   String profileImageUrl = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400";
 
   @override
@@ -28,22 +32,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> loadUserProfile() async {
-  final prefs = await SharedPreferences.getInstance();
+    try {
+      final result = await authController.getMe();
+      
+      if (result['success'] == true) {
+        final data = result['data'];
+        setState(() {
+          namaController.text = data['nama'] ?? "Nama User";
+          emailController.text = data['email'] ?? "user@gmail.com";
+          alamatController.text = data['alamat'] ?? "Belum diisi";
+          teleponController.text = data['telepon'] ?? "Belum diisi";
+          isLoadingProfile = false;
+        });
 
-  setState(() {
-    namaController.text = prefs.getString("nama") ?? "Nama User";
-    emailController.text = prefs.getString("email") ?? "user@gmail.com";
-    alamatController.text = prefs.getString("alamat") ?? "Belum diisi";
-    teleponController.text = prefs.getString("telepon") ?? "Belum diisi";
-
-    isLoadingProfile = false;
-  });
-}
-
+        // Simpan ke SharedPreferences untuk cache
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString("nama", data['nama'] ?? "");
+        prefs.setString("email", data['email'] ?? "");
+        prefs.setString("alamat", data['alamat'] ?? "");
+        prefs.setString("telepon", data['telepon'] ?? "");
+      } else {
+        setState(() {
+          isLoadingProfile = false;
+        });
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Gagal memuat profil'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        isLoadingProfile = false;
+      });
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
+    await prefs.clear();
     if (!mounted) return;
     
     Navigator.pushNamedAndRemoveUntil(
@@ -143,6 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               fillColor: Colors.grey[50],
             ),
             maxLines: field == "Alamat" ? 3 : 1,
+            keyboardType: field == "Nomor Telepon" ? TextInputType.phone : TextInputType.text,
           ),
           actions: [
             TextButton(
@@ -158,7 +197,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                // Tampilkan dialog konfirmasi
                 showSaveConfirmationDialog(field, controller, tempController.text);
               },
               style: ElevatedButton.styleFrom(
@@ -290,13 +328,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              // TODO: Simpan perubahan ke API
-              setState(() {
-                controller.text = newValue;
-              });
-              final prefs = await SharedPreferences.getInstance();
-              prefs.setString(field.toLowerCase(), newValue);
-
               Navigator.pop(context);
               
               // Tampilkan loading
@@ -326,28 +357,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               );
-              
-              await Future.delayed(const Duration(milliseconds: 500));
-              
-              if (!mounted) return;
-              Navigator.pop(context); // Tutup loading
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(Icons.check_circle, color: Colors.white),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text('$field berhasil diperbarui')),
-                    ],
+
+              try {
+                // Kirim ke API
+                final prefs = await SharedPreferences.getInstance();
+                String? token = prefs.getString("token");
+
+                final response = await ApiService.postAuth("/update-profile", {
+                  "user_name": namaController.text,
+                  "address": alamatController.text,
+                  "user_phone": teleponController.text,
+                }, token!);
+
+                final result = jsonDecode(response.body);
+
+                if (!mounted) return;
+                Navigator.pop(context); // Tutup loading
+
+                if (result['success'] == true) {
+                  setState(() {
+                    controller.text = newValue;
+                  });
+
+                  // Update SharedPreferences
+                  final fieldKey = _getFieldKey(field);
+                  prefs.setString(fieldKey, newValue);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.white),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text('$field berhasil diperbarui')),
+                        ],
+                      ),
+                      backgroundColor: const Color(0xFF9DD79D),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(result['message'] ?? 'Gagal memperbarui profil'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (!mounted) return;
+                Navigator.pop(context); // Tutup loading
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
                   ),
-                  backgroundColor: const Color(0xFF9DD79D),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              );
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF9DD79D),
@@ -364,6 +434,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  String _getFieldKey(String field) {
+    switch (field) {
+      case "Nama":
+      case "Nama Lengkap":
+        return "nama";
+      case "Email":
+        return "email";
+      case "Alamat":
+        return "alamat";
+      case "Nomor Telepon":
+        return "telepon";
+      default:
+        return field.toLowerCase();
+    }
   }
 
   IconData _getIconForField(String field) {
@@ -489,7 +575,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       const SizedBox(height: 20),
 
-                      // Profile Card dengan foto dari file lokal
+                      // Profile Card
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 24),
                         padding: const EdgeInsets.all(24),
@@ -709,7 +795,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
           onTap: (index) {
-            // TODO: Navigation logic
+            // Navigation logic
             switch (index) {
               case 0:
                 // Navigator.pushNamed(context, '/home');
