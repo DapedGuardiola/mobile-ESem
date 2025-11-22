@@ -1,9 +1,11 @@
+import 'package:e_sem/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'screens/auth_choice_screen.dart';
 import 'screens/landing_page.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/profile_screen.dart';
 
 
 
@@ -25,6 +27,8 @@ class MyApp extends StatelessWidget {
         "/login": (context) => const LoginScreen(),
         "/register": (context) => const RegisterScreen(),
         "/dashboard": (context) => const DashboardScreen(),
+        "/profile": (context) => const ProfileScreen(),
+
       },
 
     );

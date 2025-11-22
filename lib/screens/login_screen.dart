@@ -39,8 +39,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ).showSnackBar(SnackBar(content: Text('Login berhasil!')));
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/dashboard',
-          (Route<dynamic> route) => false, // hapus semua halaman sebelumnya
+          '/profile',
+          (Route<dynamic> route) => false, 
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
