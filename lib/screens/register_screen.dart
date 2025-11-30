@@ -43,7 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ).showSnackBar(SnackBar(content: Text('Register berhasil!')));
           Navigator.pushNamedAndRemoveUntil(
             context,
-            '/dashboard',
+            '/home',
             (route) => false,
           );
         } else {
