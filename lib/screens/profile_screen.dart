@@ -770,7 +770,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fontSize: 12,
           ),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
-          currentIndex: 3,
+          currentIndex: 3, // Account page active
           elevation: 0,
           items: const [
             BottomNavigationBarItem(
@@ -779,9 +779,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today_outlined, size: 26),
-              activeIcon: Icon(Icons.calendar_today, size: 26),
-              label: 'Event',
+              icon: Icon(Icons.qr_code_scanner, size: 26),
+              activeIcon: Icon(Icons.qr_code_scanner, size: 26),
+              label: 'Scan',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.history, size: 28),
@@ -789,7 +789,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               label: 'History',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline, size: 28),
+              icon: Icon(Icons.person_outlined, size: 28),
               activeIcon: Icon(Icons.person, size: 28),
               label: 'Account',
             ),
@@ -798,10 +798,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Navigation logic
             switch (index) {
               case 0:
-                // Navigator.pushNamed(context, '/home');
+                Navigator.pushNamedAndRemoveUntil(
+                  context, 
+                  '/home', 
+                  (route) => false
+                );
                 break;
               case 1:
-                // Navigator.pushNamed(context, '/event');
+                // Navigator.pushNamed(context, '/scan');
                 break;
               case 2:
                 // Navigator.pushNamed(context, '/history');

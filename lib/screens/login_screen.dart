@@ -29,17 +29,34 @@ class _LoginScreenState extends State<LoginScreen> {
     String password = passwordController.text;
     try {
       Map result = await authController.login(email, password);
-      if (!mounted) return; // jika widget sudah hilang, hentikan eksekusi
+      if (!mounted) return;
 
       if (result.containsKey('token')) {
         await saveToken(result['token']);
-        // login berhasil
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Login berhasil!')));
+        
+        // Simpan data user ke SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        if (result.containsKey('user')) {
+          // Sesuaikan dengan response API Anda
+          prefs.setString('nama', result['user']['nama'] ?? 'User');
+          prefs.setString('email', result['user']['email'] ?? '');
+        } else {
+          // Fallback jika response tidak memiliki user data
+          // Anda mungkin perlu memanggil API getMe() di sini
+          final userResult = await authController.getMe();
+          if (userResult['success'] == true) {
+            final userData = userResult['data'];
+            prefs.setString('nama', userData['nama'] ?? 'User');
+            prefs.setString('email', userData['email'] ?? '');
+          }
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login berhasil!'))
+        );
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/profile',
+          '/home',
           (Route<dynamic> route) => false, 
         );
       } else {
@@ -48,9 +65,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'))
+      );
     } finally {
       setState(() {
         isLoading = false;
