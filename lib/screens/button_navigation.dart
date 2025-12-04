@@ -44,7 +44,7 @@ class CustomBottomNavigation extends StatelessWidget {
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_scanner, size: 26),
             activeIcon: Icon(Icons.qr_code_scanner, size: 26),
-            label: 'Scan',
+            label: 'Scan', // PASTIKAN LABEL "Scan"
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.history, size: 28),

@@ -18,12 +18,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController alamatController = TextEditingController();
   final TextEditingController teleponController = TextEditingController();
+  final TextEditingController roleController = TextEditingController();
 
   final AuthController authController = AuthController();
   
   bool isLoadingProfile = true;
+  bool isSaving = false;
   Uint8List? profileImageBytes;
-  String profileImageUrl = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400";
+  String profileImageUrl = "";
+  String userRole = "User";
 
   @override
   void initState() {
@@ -38,32 +41,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (result['success'] == true) {
         final data = result['data'];
         setState(() {
-          namaController.text = data['nama'] ?? "Nama User";
+          namaController.text = data['nama'] ?? data['user_name'] ?? "Nama User";
           emailController.text = data['email'] ?? "user@gmail.com";
-          alamatController.text = data['alamat'] ?? "Belum diisi";
-          teleponController.text = data['telepon'] ?? "Belum diisi";
+          alamatController.text = data['alamat'] ?? data['address'] ?? "Belum diisi";
+          teleponController.text = data['telepon'] ?? data['user_phone'] ?? "Belum diisi";
+          roleController.text = data['role'] ?? "User";
+          userRole = data['role'] ?? "User";
+          profileImageUrl = data['profile_image'] ?? "";
           isLoadingProfile = false;
         });
 
         // Simpan ke SharedPreferences untuk cache
         final prefs = await SharedPreferences.getInstance();
-        prefs.setString("nama", data['nama'] ?? "");
-        prefs.setString("email", data['email'] ?? "");
-        prefs.setString("alamat", data['alamat'] ?? "");
-        prefs.setString("telepon", data['telepon'] ?? "");
+        prefs.setString("nama", namaController.text);
+        prefs.setString("email", emailController.text);
+        prefs.setString("alamat", alamatController.text);
+        prefs.setString("telepon", teleponController.text);
+        prefs.setString("role", userRole);
       } else {
-        setState(() {
-          isLoadingProfile = false;
-        });
-        
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'Gagal memuat profil'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Fallback ke SharedPreferences jika API gagal
+        await _loadFromSharedPreferences();
       }
+    } catch (e) {
+      print('Error loading profile: $e');
+      await _loadFromSharedPreferences();
+    }
+  }
+
+  Future<void> _loadFromSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        namaController.text = prefs.getString("nama") ?? "Nama User";
+        emailController.text = prefs.getString("email") ?? "user@gmail.com";
+        alamatController.text = prefs.getString("alamat") ?? "Belum diisi";
+        teleponController.text = prefs.getString("telepon") ?? "Belum diisi";
+        userRole = prefs.getString("role") ?? "User";
+        roleController.text = userRole;
+        isLoadingProfile = false;
+      });
     } catch (e) {
       setState(() {
         isLoadingProfile = false;
@@ -72,10 +88,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          content: Text('Gagal memuat profil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> saveProfileChanges(Map<String, dynamic> updatedData) async {
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
+
+      if (token == null) {
+        throw Exception("Token tidak ditemukan");
+      }
+
+      // Kirim perubahan ke API
+      final response = await ApiService.postAuth("/update-profile", updatedData, token);
+      final result = jsonDecode(response.body);
+
+      if (result['success'] == true) {
+        // Update SharedPreferences
+        if (updatedData.containsKey('user_name')) {
+          prefs.setString("nama", updatedData['user_name']);
+        }
+        if (updatedData.containsKey('address')) {
+          prefs.setString("alamat", updatedData['address']);
+        }
+        if (updatedData.containsKey('user_phone')) {
+          prefs.setString("telepon", updatedData['user_phone']);
+        }
+
+        // Tampilkan sukses
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('Perubahan berhasil disimpan'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        throw Exception(result['message'] ?? 'Gagal menyimpan perubahan');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
           content: Text('Error: $e'),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      setState(() {
+        isSaving = false;
+      });
     }
   }
 
@@ -102,6 +180,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           profileImageBytes = result.files.single.bytes;
         });
+        
+        // Simpan ke API
+        await _uploadProfileImage(result.files.single.bytes!);
         
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -136,8 +217,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void showEditDialog(String field, TextEditingController controller) {
+  Future<void> _uploadProfileImage(Uint8List imageBytes) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
+      
+      if (token == null) return;
+
+      // Convert image to base64
+      String base64Image = base64Encode(imageBytes);
+      
+      final response = await ApiService.postAuth("/upload-profile-image", {
+        'image': base64Image,
+        'filename': 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      }, token);
+
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        // Update image URL
+        setState(() {
+          profileImageUrl = result['image_url'] ?? "";
+        });
+      }
+    } catch (e) {
+      print('Error uploading image: $e');
+    }
+  }
+
+  void showEditDialog(String field, TextEditingController controller, String fieldKey) {
     final tempController = TextEditingController(text: controller.text);
+    final fieldName = _getFieldDisplayName(fieldKey);
     
     showDialog(
       context: context,
@@ -155,13 +264,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  _getIconForField(field),
+                  _getIconForField(fieldKey),
                   color: const Color(0xFF9DD79D),
                 ),
               ),
               const SizedBox(width: 12),
               Text(
-                'Edit $field',
+                'Edit $fieldName',
                 style: const TextStyle(fontSize: 20),
               ),
             ],
@@ -169,7 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           content: TextField(
             controller: tempController,
             decoration: InputDecoration(
-              labelText: field,
+              labelText: fieldName,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
               ),
@@ -180,8 +289,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               filled: true,
               fillColor: Colors.grey[50],
             ),
-            maxLines: field == "Alamat" ? 3 : 1,
-            keyboardType: field == "Nomor Telepon" ? TextInputType.phone : TextInputType.text,
+            maxLines: fieldKey == "alamat" ? 3 : 1,
+            keyboardType: fieldKey == "telepon" ? TextInputType.phone : 
+                         fieldKey == "email" ? TextInputType.emailAddress : TextInputType.text,
           ),
           actions: [
             TextButton(
@@ -197,7 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                showSaveConfirmationDialog(field, controller, tempController.text);
+                _saveFieldChanges(fieldKey, controller, tempController.text);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF9DD79D),
@@ -218,99 +328,147 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void showSaveConfirmationDialog(String field, TextEditingController controller, String newValue) {
+  Future<void> _saveFieldChanges(String fieldKey, TextEditingController controller, String newValue) async {
+    if (newValue.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_getFieldDisplayName(fieldKey)} tidak boleh kosong'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (newValue == controller.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tidak ada perubahan pada ${_getFieldDisplayName(fieldKey)}'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      return;
+    }
+
+    // Tampilkan loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Container(
+          padding: const EdgeInsets.all(30),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9DD79D)),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Menyimpan ${_getFieldDisplayName(fieldKey)}...',
+                style: const TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Prepare data untuk API
+      final updateData = <String, dynamic>{};
+      
+      switch (fieldKey) {
+        case "nama":
+          updateData['user_name'] = newValue;
+          break;
+        case "email":
+          updateData['email'] = newValue;
+          break;
+        case "alamat":
+          updateData['address'] = newValue;
+          break;
+        case "telepon":
+          updateData['user_phone'] = newValue;
+          break;
+      }
+
+      await saveProfileChanges(updateData);
+
+      if (!mounted) return;
+      Navigator.pop(context); // Tutup loading
+
+      setState(() {
+        controller.text = newValue;
+      });
+
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Tutup loading
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menyimpan: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void showChangePasswordDialog() {
+    final oldPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(25),
         ),
-        title: Row(
+        title: const Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Konfirmasi Perubahan',
-              style: TextStyle(fontSize: 18),
-            ),
+            Icon(Icons.lock, color: Color(0xFF9DD79D)),
+            SizedBox(width: 12),
+            Text('Ganti Password'),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Apakah Anda yakin ingin menyimpan perubahan?',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _getIconForField(field),
-                        size: 18,
-                        color: Colors.grey[700],
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        field,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    newValue,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+            TextField(
+              controller: oldPasswordController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Password Lama',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+            TextField(
+              controller: newPasswordController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Password Baru',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.orange, size: 18),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Perubahan akan tersimpan permanen',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange,
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmPasswordController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Konfirmasi Password',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ],
@@ -318,153 +476,116 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: Colors.black54, fontSize: 16),
-            ),
+            child: const Text('Batal'),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
-              
-              // Tampilkan loading
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(30),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9DD79D)),
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Menyimpan perubahan...',
-                          style: TextStyle(fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-
-              try {
-                // Kirim ke API
-                final prefs = await SharedPreferences.getInstance();
-                String? token = prefs.getString("token");
-
-                final response = await ApiService.postAuth("/update-profile", {
-                  "user_name": namaController.text,
-                  "address": alamatController.text,
-                  "user_phone": teleponController.text,
-                }, token!);
-
-                final result = jsonDecode(response.body);
-
-                if (!mounted) return;
-                Navigator.pop(context); // Tutup loading
-
-                if (result['success'] == true) {
-                  setState(() {
-                    controller.text = newValue;
-                  });
-
-                  // Update SharedPreferences
-                  final fieldKey = _getFieldKey(field);
-                  prefs.setString(fieldKey, newValue);
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const Icon(Icons.check_circle, color: Colors.white),
-                          const SizedBox(width: 12),
-                          Expanded(child: Text('$field berhasil diperbarui')),
-                        ],
-                      ),
-                      backgroundColor: const Color(0xFF9DD79D),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(result['message'] ?? 'Gagal memperbarui profil'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (!mounted) return;
-                Navigator.pop(context); // Tutup loading
-                
+              if (newPasswordController.text != confirmPasswordController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error: $e'),
+                  const SnackBar(
+                    content: Text('Password baru tidak cocok'),
                     backgroundColor: Colors.red,
                   ),
                 );
+                return;
               }
+
+              Navigator.pop(context);
+              await _changePassword(
+                oldPasswordController.text,
+                newPasswordController.text,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF9DD79D),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
             ),
-            child: const Text(
-              'Ya, Simpan',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            child: const Text('Ganti Password'),
           ),
         ],
       ),
     );
   }
 
-  String _getFieldKey(String field) {
-    switch (field) {
-      case "Nama":
-      case "Nama Lengkap":
-        return "nama";
-      case "Email":
-        return "email";
-      case "Alamat":
-        return "alamat";
-      case "Nomor Telepon":
-        return "telepon";
-      default:
-        return field.toLowerCase();
+  Future<void> _changePassword(String oldPassword, String newPassword) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
+
+      if (token == null) {
+        throw Exception("Token tidak ditemukan");
+      }
+
+      final response = await ApiService.postAuth("/change-password", {
+        'old_password': oldPassword,
+        'new_password': newPassword,
+      }, token);
+
+      final result = jsonDecode(response.body);
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password berhasil diubah'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception(result['message'] ?? 'Gagal mengubah password');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  IconData _getIconForField(String field) {
-    switch (field) {
-      case "Nama":
-      case "Nama Lengkap":
+  String _getFieldDisplayName(String fieldKey) {
+    switch (fieldKey) {
+      case "nama":
+        return "Nama Lengkap";
+      case "email":
+        return "Email";
+      case "alamat":
+        return "Alamat";
+      case "telepon":
+        return "Nomor Telepon";
+      case "role":
+        return "Role";
+      default:
+        return fieldKey;
+    }
+  }
+
+  IconData _getIconForField(String fieldKey) {
+    switch (fieldKey) {
+      case "nama":
         return Icons.person;
-      case "Email":
+      case "email":
         return Icons.email;
-      case "Alamat":
+      case "alamat":
         return Icons.location_on;
-      case "Nomor Telepon":
+      case "telepon":
         return Icons.phone;
+      case "role":
+        return Icons.assignment_ind;
       default:
         return Icons.edit;
+    }
+  }
+
+  String _getFieldKeyForApi(String fieldKey) {
+    switch (fieldKey) {
+      case "nama":
+        return "user_name";
+      case "alamat":
+        return "address";
+      case "telepon":
+        return "user_phone";
+      default:
+        return fieldKey;
     }
   }
 
@@ -487,17 +608,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   pinned: true,
                   backgroundColor: const Color(0xFF9DD79D),
                   elevation: 0,
-                  leading: Container(
-                    margin: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-                      onPressed: () => Navigator.pop(context),
+                  automaticallyImplyLeading: false,
+                  title: const Text(
+                    'Profile',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
                     ),
                   ),
+                  centerTitle: true,
                   actions: [
                     Container(
                       margin: const EdgeInsets.all(8),
@@ -610,7 +730,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     backgroundColor: Colors.grey[300],
                                     backgroundImage: profileImageBytes != null
                                         ? MemoryImage(profileImageBytes!)
-                                        : NetworkImage(profileImageUrl) as ImageProvider,
+                                        : (profileImageUrl.isNotEmpty
+                                            ? NetworkImage(profileImageUrl) as ImageProvider
+                                            : const AssetImage('assets/images/default_profile.png')),
                                   ),
                                 ),
                                 Positioned(
@@ -658,9 +780,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 color: const Color(0xFF9DD79D).withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: const Text(
-                                "User",
-                                style: TextStyle(
+                              child: Text(
+                                userRole,
+                                style: const TextStyle(
                                   fontSize: 14,
                                   color: Color(0xFF5AA65A),
                                   fontWeight: FontWeight.w600,
@@ -706,7 +828,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.person_outline,
                         label: "Nama Lengkap",
                         value: namaController.text,
-                        onEdit: () => showEditDialog("Nama", namaController),
+                        onEdit: () => showEditDialog("Nama", namaController, "nama"),
                         color: const Color(0xFF9DD79D),
                       ),
 
@@ -717,7 +839,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.email_outlined,
                         label: "Email",
                         value: emailController.text,
-                        onEdit: () => showEditDialog("Email", emailController),
+                        onEdit: () => showEditDialog("Email", emailController, "email"),
                         color: const Color(0xFF7EB7E8),
                       ),
 
@@ -728,7 +850,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.location_on_outlined,
                         label: "Alamat",
                         value: alamatController.text,
-                        onEdit: () => showEditDialog("Alamat", alamatController),
+                        onEdit: () => showEditDialog("Alamat", alamatController, "alamat"),
                         color: const Color(0xFFE89A7E),
                       ),
 
@@ -739,8 +861,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.phone_outlined,
                         label: "Nomor Telepon",
                         value: teleponController.text,
-                        onEdit: () => showEditDialog("Nomor Telepon", teleponController),
+                        onEdit: () => showEditDialog("Nomor Telepon", teleponController, "telepon"),
                         color: const Color(0xFFE8D77E),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Field Role (read-only)
+                      _buildProfileField(
+                        icon: Icons.assignment_ind_outlined,
+                        label: "Role",
+                        value: roleController.text,
+                        onEdit: null, // Role tidak bisa diedit
+                        color: const Color(0xFF9C27B0),
+                        isEditable: false,
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      // Change Password Button
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: showChangePasswordDialog,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                                side: const BorderSide(color: Color(0xFF9DD79D), width: 2),
+                              ),
+                              elevation: 0,
+                            ),
+                            icon: const Icon(
+                              Icons.lock_outline,
+                              color: Color(0xFF9DD79D),
+                              size: 24,
+                            ),
+                            label: const Text(
+                              'Ganti Password',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF9DD79D),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 100),
@@ -795,7 +964,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
           onTap: (index) {
-            // Navigation logic
             switch (index) {
               case 0:
                 Navigator.pushNamedAndRemoveUntil(
@@ -805,10 +973,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
                 break;
               case 1:
-                // Navigator.pushNamed(context, '/scan');
+                Navigator.pushNamedAndRemoveUntil(
+                  context, 
+                  '/scan-qr', 
+                  (route) => false
+                );
                 break;
               case 2:
-                // Navigator.pushNamed(context, '/history');
+                Navigator.pushNamedAndRemoveUntil(
+                  context, 
+                  '/history', 
+                  (route) => false
+                );
                 break;
               case 3:
                 // Already on Account page
@@ -824,8 +1000,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required IconData icon,
     required String label,
     required String value,
-    required VoidCallback onEdit,
+    required VoidCallback? onEdit,
     required Color color,
+    bool isEditable = true,
   }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -843,7 +1020,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onEdit,
+          onTap: isEditable ? onEdit : null,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -885,18 +1062,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(10),
+                if (isEditable)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.edit_outlined,
+                      color: Colors.black54,
+                      size: 20,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.edit_outlined,
-                    color: Colors.black54,
-                    size: 20,
-                  ),
-                ),
               ],
             ),
           ),
@@ -911,6 +1089,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     emailController.dispose();
     alamatController.dispose();
     teleponController.dispose();
+    roleController.dispose();
     super.dispose();
   }
 }
