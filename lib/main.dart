@@ -30,7 +30,7 @@ class MyApp extends StatelessWidget {
         "/auth": (context) => const AuthChoiceScreen(),
         "/login": (context) => const LoginScreen(),
         "/register": (context) => const RegisterScreen(),
-        "/home": (context) => const HomeScreen(),
+        "/home": (context) => const HistoryScreen(),
         "/profile": (context) => const ProfileScreen(),
         
         // Event routes - hanya yang utama

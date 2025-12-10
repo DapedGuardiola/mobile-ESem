@@ -1,6 +1,7 @@
 import 'dart:convert';
 import '../services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/event_model.dart';
 
 class EventController {
   // Mendapatkan semua event aktif
@@ -115,33 +116,17 @@ class EventController {
   }
 
   // Mendapatkan riwayat event
-  Future<Map<String, dynamic>> getEventHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'Token tidak ditemukan.',
-          'data': [],
-        };
-      }
+  Future<List<Event>> getRecentEvent() async {
+    final response = await ApiService.getRequest("/events");
 
-      final response = await ApiService.getAuth('/events/history', token);
+    if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
-      
-      return {
-        'success': response.statusCode == 200,
-        'data': result['data'] ?? [],
-        'message': result['message'] ?? '',
-      };
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-        'data': [],
-      };
+
+      final List<dynamic> dynamicList = result["recentEvent"];
+
+      return dynamicList.map((json) => Event.fromJson(json)).toList();
+    } else {
+      throw Exception("Failed to load events");
     }
   }
 
