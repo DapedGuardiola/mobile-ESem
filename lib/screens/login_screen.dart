@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../controllers/auth_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool isLoading = false;
 
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', token);
+  }
+
   void login() async {
     setState(() {
       isLoading = true;
@@ -23,17 +29,35 @@ class _LoginScreenState extends State<LoginScreen> {
     String password = passwordController.text;
     try {
       Map result = await authController.login(email, password);
-      if (!mounted) return; // jika widget sudah hilang, hentikan eksekusi
+      if (!mounted) return;
 
       if (result.containsKey('token')) {
-        // login berhasil
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Login berhasil!')));
+        await saveToken(result['token']);
+        
+        // Simpan data user ke SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        if (result.containsKey('user')) {
+          // Sesuaikan dengan response API Anda
+          prefs.setString('nama', result['user']['nama'] ?? 'User');
+          prefs.setString('email', result['user']['email'] ?? '');
+        } else {
+          // Fallback jika response tidak memiliki user data
+          // Anda mungkin perlu memanggil API getMe() di sini
+          final userResult = await authController.getMe();
+          if (userResult['success'] == true) {
+            final userData = userResult['data'];
+            prefs.setString('nama', userData['nama'] ?? 'User');
+            prefs.setString('email', userData['email'] ?? '');
+          }
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login berhasil!'))
+        );
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/dashboard',
-          (Route<dynamic> route) => false, // hapus semua halaman sebelumnya
+          '/home',
+          (Route<dynamic> route) => false, 
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -41,13 +65,14 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'))
+      );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
     }
-    setState(() {
-      isLoading = false;
-    });
   }
 
   @override
@@ -127,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         // TODO: Login Logic
-                       login();
+                        login();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF9DD79D),
