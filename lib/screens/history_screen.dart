@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../controllers/event_controller.dart';
 import '../controllers/attendance_controller.dart';
 import 'event_detail_full_screen.dart';
+import '../models/event_model.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -17,14 +18,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   final AttendanceController attendanceController = AttendanceController();
   
   bool isLoading = true;
-  List<Map<String, dynamic>> allEvents = [];
-  List<Map<String, dynamic>> filteredEvents = [];
+  List<Event> allEvents = [];
+  List<Event> filteredEvents = [];
   
   // Untuk filtering
   String selectedFilter = 'all'; // all, today, week, month
-  List<Map<String, dynamic>> todayEvents = [];
-  List<Map<String, dynamic>> thisWeekEvents = [];
-  List<Map<String, dynamic>> thisMonthEvents = [];
+  List<Event> todayEvents = [];
+  List<Event> thisWeekEvents = [];
+  List<Event> thisMonthEvents = [];
 
   @override
   void initState() {
@@ -39,15 +40,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     try {
       // Load event history
-      final result = await eventController.getEventHistory();
-      
-      if (result['success'] == true) {
-        final events = List<Map<String, dynamic>>.from(result['data']);
-        
+      final result = await eventController.getRecentEvent();
         // Sort by date (newest first)
+        final events = result;
         events.sort((a, b) {
-          final dateA = DateTime.tryParse(a['date'] ?? '') ?? DateTime(2000);
-          final dateB = DateTime.tryParse(b['date'] ?? '') ?? DateTime(2000);
+          final dateA = DateTime.parse(a.eventDetail!.date);
+          final dateB = DateTime.parse(b.eventDetail!.date);
           return dateB.compareTo(dateA);
         });
 
@@ -56,13 +54,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           filteredEvents = events;
           _categorizeEvents(events);
         });
-      } else {
-        // Fallback dummy data jika API error
-        _loadDummyData();
-      }
     } catch (e) {
       print('Error loading history: $e');
-      _loadDummyData();
     } finally {
       setState(() {
         isLoading = false;
@@ -70,66 +63,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  void _loadDummyData() {
-    final dummyEvents = [
-      {
-        'id': 1,
-        'name': 'Good Day SCHOOLICIOUS',
-        'date': '2025-08-22',
-        'formatted_date': '22 August 2025',
-        'time': '07.30 - 15.00',
-        'location': 'Graha Polinema, Malang, Jawa Timur',
-        'image': 'assets/img/event_placeholder.png',
-        'type': 'unpaid',
-        'status': 'completed',
-        'participant_count': 150,
-        'current_participants': 120,
-      },
-      {
-        'id': 2,
-        'name': 'Seminar Kewirausahaan',
-        'date': '2025-08-20',
-        'formatted_date': '20 August 2025',
-        'time': '09.00 - 12.00',
-        'location': 'Auditorium Utama, Polinema',
-        'image': 'assets/img/event_placeholder.png',
-        'type': 'paid',
-        'status': 'completed',
-        'participant_count': 100,
-        'current_participants': 85,
-      },
-      {
-        'id': 3,
-        'name': 'Workshop Flutter',
-        'date': '2025-08-18',
-        'formatted_date': '18 August 2025',
-        'time': '13.00 - 17.00',
-        'location': 'Lab. Komputer, Gedung TIF',
-        'image': 'assets/img/event_placeholder.png',
-        'type': 'unpaid',
-        'status': 'completed',
-        'participant_count': 50,
-        'current_participants': 48,
-      },
-    ];
 
-    setState(() {
-      allEvents = dummyEvents;
-      filteredEvents = dummyEvents;
-      _categorizeEvents(dummyEvents);
-    });
-  }
-
-  void _categorizeEvents(List<Map<String, dynamic>> events) {
+  void _categorizeEvents(List<Event> events) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    
-    final todayList = <Map<String, dynamic>>[];
-    final weekList = <Map<String, dynamic>>[];
-    final monthList = <Map<String, dynamic>>[];
+    final todayList = <Event>[];
+    final weekList = <Event>[];
+    final monthList = <Event>[];
 
     for (final event in events) {
-      final eventDateStr = event['date'];
+      final eventDateStr = event.eventDetail?.date;
       if (eventDateStr == null) continue;
       
       final eventDate = DateTime.tryParse(eventDateStr);
@@ -165,8 +108,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     final filtered = allEvents.where((event) {
-      final name = event['name']?.toString().toLowerCase() ?? '';
-      final location = event['location']?.toString().toLowerCase() ?? '';
+      final name = event.eventName.toString().toLowerCase();
+      final location = event.eventDetail?.eventAddress.toString().toLowerCase() ?? '';
       final searchLower = query.toLowerCase();
       
       return name.contains(searchLower) || location.contains(searchLower);
@@ -211,23 +154,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   String _getStatusColor(String status) {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-        return '0xFF4CAF50'; // Green
-      case 'ongoing':
+    switch (status.toLowerCase().trim()) {
+      case 'ended':
+        return '0xFF9E9E9E'; // Green
+      case 'on going':
         return '0xFFFF9800'; // Orange
       case 'cancelled':
         return '0xFFF44336'; // Red
       default:
-        return '0xFF9E9E9E'; // Grey
+        return '0xFF4CAF50'; // Grey
     }
   }
 
   String _getStatusText(String status) {
-    switch (status?.toLowerCase()) {
-      case 'completed':
+    switch (status.toLowerCase().trim()) {
+      case 'ended':
         return 'Selesai';
-      case 'ongoing':
+      case 'on going':
         return 'Berlangsung';
       case 'cancelled':
         return 'Dibatalkan';
@@ -466,15 +409,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildEventCard(Map<String, dynamic> event) {
-    final formattedDate = event['formatted_date'] ?? 
-        _formatDate(event['date'] ?? 'Tanggal tidak diketahui');
+  Widget _buildEventCard(Event event) {
+    final formattedDate = event.eventDetail?.dateString ?? 'Tanggal tidak diketahui';
     
-    final statusColor = Color(int.parse(_getStatusColor(event['status'] ?? '')));
-    final statusText = _getStatusText(event['status'] ?? '');
+    final statusColor = Color(int.parse(_getStatusColor(event.eventStatus)));
+    final statusText = _getStatusText(event.eventStatus);
+    print('event_status =');
+    print(event.eventStatus);
     
-    final participantCount = event['participant_count'] ?? 0;
-    final currentParticipants = event['current_participants'] ?? 0;
+    final participantCount = event.eventDetail?.totalParticipant ?? 0;
+    final currentParticipants = event.eventDetail?.totalParticipant  ?? 0;
     final attendanceRate = participantCount > 0 
         ? ((currentParticipants / participantCount) * 100).round()
         : 0;
@@ -500,7 +444,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) => EventDetailFullScreen(
-                  eventId: event['id'],
+                  eventId: event.eventId,
                   showExport: true,
                 ),
               ),
@@ -570,7 +514,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         children: [
                           // Event Name
                           Text(
-                            event['name'] ?? 'Nama Event',
+                            event.eventName,
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -591,7 +535,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                event['time'] ?? 'Waktu tidak diketahui',
+                                event.eventDetail?.timeString ?? 'Waktu tidak diketahui',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey[700],
@@ -613,7 +557,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  event['location'] ?? 'Lokasi tidak diketahui',
+                                  event.eventDetail?.eventAddress ?? 'Lokasi tidak diketahui',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey[600],
@@ -697,7 +641,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => EventDetailFullScreen(
-                                        eventId: event['id'],
+                                        eventId: event.eventId,
                                         showExport: true,
                                       ),
                                     ),
@@ -726,10 +670,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               const SizedBox(width: 10),
                               
                               // Export Button (only for completed events)
-                              if (event['status'] == 'completed')
+                              if (event.eventStatus == 'Ended')
                                 OutlinedButton(
                                   onPressed: () {
-                                    _showExportOptions(event['id']);
+                                    _showExportOptions(event.eventId);
                                   },
                                   style: OutlinedButton.styleFrom(
                                     side: const BorderSide(color: Color(0xFF9DD79D)),
@@ -944,19 +888,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  String _formatDate(String dateString) {
-    try {
-      final date = DateTime.parse(dateString);
-      final months = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-      ];
-      
-      return '${date.day} ${months[date.month - 1]} ${date.year}';
-    } catch (e) {
-      return dateString;
-    }
-  }
 
   @override
   void dispose() {

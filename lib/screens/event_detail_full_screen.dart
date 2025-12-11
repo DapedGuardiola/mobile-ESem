@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../controllers/attendance_controller.dart';
 import '../controllers/event_controller.dart';
+import '../models/event_model.dart';
+import '../models/participant_model.dart';
 
 class EventDetailFullScreen extends StatefulWidget {
   final int? eventId;
@@ -22,8 +24,8 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
   int currentPage = 1;
   final int itemsPerPage = 10;
   
-  Map<String, dynamic>? eventDetail;
-  List<Map<String, dynamic>> participants = [];
+  Event? event;
+  List<Participant> participants = [];
   bool isLoading = true;
   
   final AttendanceController attendanceController = AttendanceController();
@@ -34,7 +36,6 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
     super.initState();
     if (widget.eventId != null) {
       _loadEventDetail();
-      _loadParticipants();
     } else {
       setState(() {
         isLoading = false;
@@ -44,60 +45,21 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
 
   Future<void> _loadEventDetail() async {
     if (widget.eventId == null) return;
-    
     try {
-      final result = await eventController.getEventDetail(widget.eventId!);
-      if (result['success'] == true) {
+      final (eventData, participantData) = await eventController.getEventDetail(widget.eventId!);
         setState(() {
-          eventDetail = result['data'];
+          event = eventData;
+          participants = participantData;
+          isLoading = false;
         });
-      }
     } catch (e) {
       print('Error loading event detail: $e');
     }
   }
 
-  Future<void> _loadParticipants() async {
-    if (widget.eventId == null) return;
-    
-    setState(() {
-      isLoading = true;
-    });
-    
-    try {
-      final result = await attendanceController.getEventParticipants(widget.eventId!);
-      if (result['success'] == true) {
-        setState(() {
-          participants = List<Map<String, dynamic>>.from(result['data']);
-        });
-      } else {
-        // Fallback dummy data jika API tidak tersedia
-        _loadDummyParticipants();
-      }
-    } catch (e) {
-      print('Error loading participants: $e');
-      _loadDummyParticipants();
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  void _loadDummyParticipants() {
-    participants = [
-      {'name': 'Jane Cooper', 'regist': 'OFF-112', 'time': '07:31:50 AM'},
-      {'name': 'Floyd Miles', 'regist': 'ON-074', 'time': '07:31:50 AM'},
-      {'name': 'Ronald Richards', 'regist': 'OFF-113', 'time': '07:32:15 AM'},
-      {'name': 'Savannah Nguyen', 'regist': 'ON-075', 'time': '07:33:20 AM'},
-      {'name': 'Kathryn Murphy', 'regist': 'OFF-114', 'time': '07:34:10 AM'},
-    ];
-  }
-
   Future<void> _refreshData() async {
     await Future.wait([
       _loadEventDetail(),
-      _loadParticipants(),
     ]);
   }
 
@@ -405,7 +367,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Event Info Card
-                            if (eventDetail != null) _buildEventInfoCard(),
+                            if (event != null) _buildEventInfoCard(),
                             
                             const SizedBox(height: 20),
 
@@ -561,7 +523,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                             const SizedBox(height: 20),
 
                             // Address
-                            if (eventDetail != null && eventDetail!['location'] != null)
+                            if (event != null && event?.eventDetail?.eventAddress != null)
                               Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(16),
@@ -589,7 +551,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      eventDetail!['location'] ?? 'Alamat tidak tersedia',
+                                      event?.eventDetail?.eventAddress ?? 'Alamat tidak tersedia',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey[700],
@@ -603,7 +565,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                             const SizedBox(height: 20),
 
                             // Event Description
-                            if (eventDetail != null && eventDetail!['description'] != null)
+                            if (event?.eventDetail != null && event?.eventDetail!.eventDescription!= null)
                               Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(16),
@@ -631,7 +593,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      eventDetail!['description'] ?? 'Deskripsi tidak tersedia',
+                                      event?.eventDetail?.eventDescription ?? 'Deskripsi tidak tersedia',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey[700],
@@ -683,7 +645,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
         children: [
           // Event Name
           Text(
-            eventDetail!['name'] ?? 'Nama Event',
+            event?.eventName ?? 'Nama Event',
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -698,7 +660,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
               Icon(Icons.calendar_today, size: 18, color: Colors.grey[600]),
               const SizedBox(width: 8),
               Text(
-                _formatDate(eventDetail!['date']),
+                _formatDate(event?.eventDetail?.dateString),
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[700],
@@ -708,7 +670,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
               Icon(Icons.access_time, size: 18, color: Colors.grey[600]),
               const SizedBox(width: 8),
               Text(
-                eventDetail!['time'] ?? 'Waktu tidak diketahui',
+                event?.eventDetail?.timeString ?? 'Waktu tidak diketahui',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[700],
@@ -724,21 +686,21 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: eventDetail!['type'] == 'paid' 
+                  color: event?.eventDetail?.paidStatus == 1 
                       ? const Color(0xFFF3E5F5) 
                       : const Color(0xFFE8F5E8),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: eventDetail!['type'] == 'paid' 
+                    color: event?.eventDetail?.paidStatus == 1 
                         ? const Color(0xFF7B1FA2) 
                         : const Color(0xFF9DD79D),
                   ),
                 ),
                 child: Text(
-                  eventDetail!['type'] == 'paid' ? 'Berbayar' : 'Gratis',
+                  event?.eventDetail?.paidStatus == 1 ? 'Berbayar' : 'Gratis',
                   style: TextStyle(
                     fontSize: 12,
-                    color: eventDetail!['type'] == 'paid' 
+                    color: event?.eventDetail?.paidStatus == 1 
                         ? const Color(0xFF7B1FA2) 
                         : const Color(0xFF5AA65A),
                     fontWeight: FontWeight.w600,
@@ -754,7 +716,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                   border: Border.all(color: const Color(0xFF7EB7E8)),
                 ),
                 child: Text(
-                  'Maks: ${eventDetail!['max_participants'] ?? 0} peserta',
+                  'Maks: ${event?.eventDetail?.totalParticipant} peserta',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF1976D2),
@@ -886,7 +848,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                     Expanded(
                       flex: 2,
                       child: Text(
-                        participant['name'] ?? 'Nama tidak diketahui',
+                        participant.registered?.name ?? 'Nama tidak diketahui',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -896,7 +858,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        participant['regist'] ?? '-',
+                        participant.registered?.name ?? '-',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey[700],
@@ -918,7 +880,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                           ),
                         ),
                         child: Text(
-                          participant['time'] ?? '-',
+                          '17:10',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,

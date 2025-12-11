@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/event_controller.dart';
 import '../controllers/auth_controller.dart';
+import '../models/event_model.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,8 +16,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String userName = "User";
   String userEmail = "";
   bool isLoading = true;
-  List<Map<String, dynamic>> activeEvents = [];
-  List<Map<String, dynamic>> upcomingEvents = [];
+  List<Event> activeEvents = [];
+  List<Event> upcomingEvents = [];
   final EventController eventController = EventController();
   final AuthController authController = AuthController();
 
@@ -46,23 +47,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadEvents() async {
     try {
       // Load active events
-      final activeResult = await eventController.getActiveEvents();
-      if (activeResult['success'] == true) {
-        setState(() {
-          activeEvents = List<Map<String, dynamic>>.from(activeResult['data']);
-        });
-      }
-
-      // Load upcoming events (coming soon)
-      final upcomingResult = await eventController.getEventHistory();
-      if (upcomingResult['success'] == true) {
-        setState(() {
-          upcomingEvents = List<Map<String, dynamic>>.from(upcomingResult['data'])
-              .where((event) => event['status'] == 'upcoming')
-              .take(3) // Limit to 3 events
-              .toList();
-        });
-      }
+      final activeResult = await eventController.getActiveEvent();
+      final upcomingResult = await eventController.getComingSoonEvent();
+      setState(() {
+        activeEvents = activeResult;
+        upcomingEvents = upcomingResult;
+      });
     } catch (e) {
       print('Error loading events: $e');
     }
@@ -72,10 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       isLoading = true;
     });
-    await Future.wait([
-      _loadUserData(),
-      _loadEvents(),
-    ]);
+    await Future.wait([_loadUserData(), _loadEvents()]);
     setState(() {
       isLoading = false;
     });
@@ -85,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     if (!mounted) return;
-    
+
     Navigator.pushNamedAndRemoveUntil(
       context,
       '/login',
@@ -97,9 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(25),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
         title: const Row(
           children: [
             Icon(Icons.logout, color: Colors.red),
@@ -111,10 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: Colors.black54),
-            ),
+            child: const Text('Batal', style: TextStyle(color: Colors.black54)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -127,10 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(15),
               ),
             ),
-            child: const Text(
-              'Logout',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -160,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     pinned: true,
                     backgroundColor: const Color(0xFF9DD79D),
                     elevation: 0,
-                    automaticallyImplyLeading: false, 
+                    automaticallyImplyLeading: false,
                     title: const Text(
                       'Home',
                       style: TextStyle(
@@ -178,7 +157,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.logout, color: Colors.white, size: 24),
+                          icon: const Icon(
+                            Icons.logout,
+                            color: Colors.white,
+                            size: 24,
+                          ),
                           onPressed: _showLogoutDialog,
                         ),
                       ),
@@ -189,10 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [
-                              Color(0xFF9DD79D),
-                              Color(0xFF7EC97E),
-                            ],
+                            colors: [Color(0xFF9DD79D), Color(0xFF7EC97E)],
                           ),
                         ),
                       ),
@@ -252,18 +232,12 @@ class _HomeScreenState extends State<HomeScreen> {
         if (userEmail.isNotEmpty)
           Text(
             userEmail,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
         const SizedBox(height: 5),
         const Text(
           'Siap untuk absensi hari ini?',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.black54,
-          ),
+          style: TextStyle(fontSize: 16, color: Colors.black54),
         ),
       ],
     );
@@ -296,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildComingSoonCard(Map<String, dynamic> event) {
+  Widget _buildComingSoonCard(Event event) {
     return Container(
       width: 280,
       margin: const EdgeInsets.only(right: 15),
@@ -338,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            event['name'] ?? 'Nama Event',
+            event.eventName,
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -354,11 +328,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
-                  event['date'] ?? 'Tanggal belum ditentukan',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  event.eventDetail?.dateString ?? 'Tanggal belum ditentukan',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ),
             ],
@@ -370,11 +341,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
-                  event['location'] ?? 'Lokasi belum ditentukan',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  event.eventDetail?.eventAddress ?? 'Lokasi belum ditentukan',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -389,7 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              '${event['registered_count'] ?? 0} peserta terdaftar',
+              '${event.eventDetail?.registeredCount ?? 0} peserta terdaftar',
               style: const TextStyle(
                 fontSize: 11,
                 color: Color(0xFF5AA65A),
@@ -420,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pushNamed(
-                  context, 
+                  context,
                   '/event-list',
                   arguments: {
                     'event_id': 1,
@@ -441,7 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 15),
         activeEvents.isEmpty
             ? _buildNoActiveEventCard()
-            : _buildActiveEventCard(activeEvents.first),
+            : _buildActiveEventCard(activeEvents[0]),
         const SizedBox(height: 20),
       ],
     );
@@ -463,11 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.event_busy,
-            size: 60,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.event_busy, size: 60, color: Colors.grey[400]),
           const SizedBox(height: 16),
           const Text(
             'Tidak ada event aktif',
@@ -480,10 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 8),
           Text(
             'Belum ada event yang sedang berlangsung',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
@@ -511,18 +472,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActiveEventCard(Map<String, dynamic> event) {
+  Widget _buildActiveEventCard(Event event) {
+    
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(
           context,
           '/event-detail',
-          arguments: {'event_id': event['id']},
+          arguments: {'event_id': event.eventId},
         );
       },
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -535,155 +497,160 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
           border: Border.all(color: const Color(0xFF9DD79D)),
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Date
-            Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
+            // ==== LEFT SIDE: EVENT INFO ====
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Date
+                  Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        event.eventDetail?.dateString ??
+                            'Tanggal belum ditentukan',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  event['date'] ?? 'Tanggal belum ditentukan',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
-            // Event Title
-            Text(
-              event['name'] ?? 'Nama Event',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 12),
-
-            // Time and Location
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    event['time'] ?? 'Waktu belum ditentukan',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    event['location'] ?? 'Lokasi belum ditentukan',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                  // Title
+                  Text(
+                    event.eventName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
-            // Participants Info
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF7EB7E8)),
+                  // Time
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          event.eventDetail?.timeString ??
+                              'Waktu belum ditentukan',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    '${event['current_participants'] ?? 0}/${event['max_participants'] ?? 0} peserta',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF1976D2),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: event['type'] == 'paid' 
-                        ? const Color(0xFFF3E5F5) 
-                        : const Color(0xFFE8F5E8),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: event['type'] == 'paid' 
-                          ? const Color(0xFF7B1FA2) 
-                          : const Color(0xFF9DD79D),
-                    ),
-                  ),
-                  child: Text(
-                    event['type'] == 'paid' ? 'Berbayar' : 'Gratis',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: event['type'] == 'paid' 
-                          ? const Color(0xFF7B1FA2) 
-                          : const Color(0xFF5AA65A),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                  const SizedBox(height: 5),
 
-            // Info Detail Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(
-                    context,
-                    '/event-detail',
-                    arguments: {'event_id': event['id']},
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9DD79D),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                  // Location
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          event.eventDetail?.eventAddress ??
+                              'Lokasi belum ditentukan',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                child: const Text(
-                  'Info Detail',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                  const SizedBox(height: 10),
+
+                  // Paid Status
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: event.eventDetail?.paidStatus == 1
+                              ? const Color(0xFFF3E5F5)
+                              : const Color(0xFFE8F5E8),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: event.eventDetail?.paidStatus == 1
+                                ? const Color(0xFF7B1FA2)
+                                : const Color(0xFF9DD79D),
+                          ),
+                        ),
+                        child: Text(
+                          event.eventDetail?.paidStatus == 1
+                              ? 'Berbayar'
+                              : 'Gratis',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: event.eventDetail?.paidStatus == 1
+                                ? const Color(0xFF7B1FA2)
+                                : const Color(0xFF5AA65A),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // ====== RIGHT SIDE: IMAGE ======
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 110,
+                height: 110,
+                color: Colors.grey[200],
+                child: Image.network(
+                  event.eventDetail!.imageUrl,
+                  width: 120,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 120,
+                      height: 80,
+                      color: Colors.grey[300],
+                      child: Icon(Icons.broken_image),
+                    );
+                  },
                 ),
               ),
             ),
@@ -844,7 +811,7 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _currentIndex = index;
           });
-          
+
           switch (index) {
             case 0:
               // Already on Home page
