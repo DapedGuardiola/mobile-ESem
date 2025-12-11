@@ -1,39 +1,38 @@
 import 'registered_model.dart';
 
 class Participant {
-  final int participantId;
-  final int eventId;
-  final int sessionId;
   final int registeredId;
-  final Registered? registered; // relasi
+  final Registered registered;
+  final List<int> sessions; // daftar session yang diikuti peserta
 
   Participant({
-    required this.participantId,
-    required this.eventId,
-    required this.sessionId,
     required this.registeredId,
-    this.registered,
+    required this.registered,
+    required this.sessions,
   });
 
   factory Participant.fromJson(Map<String, dynamic> json) {
+    // sessions dikirim sebagai string "1,2,3" dari API
+    final sessionString = json['sessions'] as String;
+    final sessionList = sessionString
+        .split(',')
+        .map((s) => int.tryParse(s))
+        .where((s) => s != null)
+        .map((s) => s!)
+        .toList();
+
     return Participant(
-      participantId: json['participant_id'],
-      eventId: json['event_id'],
-      sessionId: json['session_id'],
       registeredId: json['registered_id'],
-      registered: json['registered'] != null
-          ? Registered.fromJson(json['registered'])
-          : null,
+      registered: Registered.fromJson(json['registered']),
+      sessions: sessionList,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      "participant_id": participantId,
-      "event_id": eventId,
-      "session_id": sessionId,
-      "registered_id": registeredId,
-      "registered": registered?.toJson(),
+      'registered_id': registeredId,
+      'registered': registered.toJson(),
+      'sessions': sessions.join(','), // untuk kirim balik ke API
     };
   }
 }

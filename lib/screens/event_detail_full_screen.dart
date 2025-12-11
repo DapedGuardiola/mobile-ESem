@@ -7,7 +7,7 @@ import '../models/participant_model.dart';
 class EventDetailFullScreen extends StatefulWidget {
   final int? eventId;
   final bool showExport;
-  
+
   const EventDetailFullScreen({
     super.key,
     this.eventId,
@@ -23,11 +23,13 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
   String sortBy = 'Newest';
   int currentPage = 1;
   final int itemsPerPage = 10;
-  
+
   Event? event;
   List<Participant> participants = [];
+  List<Participant> filteredParticipants = [];
   bool isLoading = true;
-  
+  int selectedSession = 0; // 0 = Semua, 1..3 = sesi tertentu
+
   final AttendanceController attendanceController = AttendanceController();
   final EventController eventController = EventController();
 
@@ -46,21 +48,36 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
   Future<void> _loadEventDetail() async {
     if (widget.eventId == null) return;
     try {
-      final (eventData, participantData) = await eventController.getEventDetail(widget.eventId!);
-        setState(() {
-          event = eventData;
-          participants = participantData;
-          isLoading = false;
-        });
+      final (eventData, participantData) = await eventController.getEventDetail(
+        widget.eventId!,
+      );
+      setState(() {
+        event = eventData;
+        participants = participantData;
+        filteredParticipants = participantData;
+        isLoading = false;
+      });
     } catch (e) {
       print('Error loading event detail: $e');
     }
   }
 
+  void filterBySession(int? session) {
+    setState(() {
+      selectedSession = session ?? 0;
+
+      if (selectedSession == 0) {
+        filteredParticipants = participants;
+      } else {
+        filteredParticipants = participants
+            .where((p) => p.sessions.contains(selectedSession))
+            .toList();
+      }
+    });
+  }
+
   Future<void> _refreshData() async {
-    await Future.wait([
-      _loadEventDetail(),
-    ]);
+    await Future.wait([_loadEventDetail()]);
   }
 
   void _showExportDialog() {
@@ -68,9 +85,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
       context: context,
       barrierDismissible: true,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(25),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
         child: Container(
           padding: const EdgeInsets.all(30),
           child: Column(
@@ -85,17 +100,10 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF9DD79D),
-                      Color(0xFF7EB7E8),
-                    ],
+                    colors: [Color(0xFF9DD79D), Color(0xFF7EB7E8)],
                   ),
                 ),
-                child: const Icon(
-                  Icons.check,
-                  size: 50,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.check, size: 50, color: Colors.white),
               ),
               const SizedBox(height: 20),
 
@@ -182,7 +190,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
 
   void _exportToPDF() async {
     if (widget.eventId == null) return;
-    
+
     // Tampilkan loading
     showDialog(
       context: context,
@@ -195,8 +203,11 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
     );
 
     try {
-      final result = await attendanceController.exportAttendance(widget.eventId!, 'pdf');
-      
+      final result = await attendanceController.exportAttendance(
+        widget.eventId!,
+        'pdf',
+      );
+
       if (!mounted) return;
       Navigator.pop(context); // Tutup loading dialog
 
@@ -218,7 +229,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error exporting: $e'),
@@ -230,7 +241,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
 
   void _exportToExcel() async {
     if (widget.eventId == null) return;
-    
+
     // Tampilkan loading
     showDialog(
       context: context,
@@ -243,8 +254,11 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
     );
 
     try {
-      final result = await attendanceController.exportAttendance(widget.eventId!, 'excel');
-      
+      final result = await attendanceController.exportAttendance(
+        widget.eventId!,
+        'excel',
+      );
+
       if (!mounted) return;
       Navigator.pop(context); // Tutup loading dialog
 
@@ -266,7 +280,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error exporting: $e'),
@@ -278,14 +292,24 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
 
   String _formatDate(String? dateString) {
     if (dateString == null) return 'Tanggal tidak diketahui';
-    
+
     try {
       final date = DateTime.parse(dateString);
       final months = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        'Januari',
+        'Februari',
+        'Maret',
+        'April',
+        'Mei',
+        'Juni',
+        'Juli',
+        'Agustus',
+        'September',
+        'Oktober',
+        'November',
+        'Desember',
       ];
-      
+
       return '${date.day} ${months[date.month - 1]} ${date.year}';
     } catch (e) {
       return dateString;
@@ -294,6 +318,30 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // jika data sudah ada tapi isLoading masih true (karena mungkin lupa set), hentikan loading
+    if (isLoading && participants.isNotEmpty) {
+      // gunakan microtask agar tidak memanggil setState langsung saat build sedang berjalan
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+      });
+    }
+
+    // mapping nama sesi
+    final Map<int, String> sessionNames = {
+      1: 'Pembukaan dan Keynote Speaker',
+      2: 'Inti Event',
+      3: 'Closing Event',
+    };
+
+    // filteredParticipants berdasarkan selectedSession
+    // final List<Participant> filteredParticipants = selectedSession == 0
+    //     ? participants
+    //     : participants.where((p) => p.sessions == selectedSession).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFD4E7D4),
       body: SafeArea(
@@ -327,7 +375,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  
+
                   const Expanded(
                     child: Center(
                       child: Text(
@@ -340,12 +388,9 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                       ),
                     ),
                   ),
-                  
+
                   // Spacer untuk balance layout
-                  Container(
-                    width: 45,
-                    height: 45,
-                  ),
+                  Container(width: 45, height: 45),
                 ],
               ),
             ),
@@ -358,7 +403,9 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                 child: isLoading
                     ? const Center(
                         child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9DD79D)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFF9DD79D),
+                          ),
                         ),
                       )
                     : SingleChildScrollView(
@@ -368,7 +415,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                           children: [
                             // Event Info Card
                             if (event != null) _buildEventInfoCard(),
-                            
+
                             const SizedBox(height: 20),
 
                             // Search and Sort Row
@@ -392,14 +439,24 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                                       controller: searchController,
                                       decoration: InputDecoration(
                                         hintText: 'Search peserta...',
-                                        hintStyle: TextStyle(color: Colors.grey[400]),
-                                        prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
-                                        border: InputBorder.none,
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 15,
-                                          vertical: 12,
+                                        hintStyle: TextStyle(
+                                          color: Colors.grey[400],
                                         ),
+                                        prefixIcon: Icon(
+                                          Icons.search,
+                                          color: Colors.grey[400],
+                                        ),
+                                        border: InputBorder.none,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 15,
+                                              vertical: 12,
+                                            ),
                                       ),
+                                      onChanged: (_) {
+                                        // jika ingin auto-filter saat mengetik, panggil setState
+                                        setState(() {});
+                                      },
                                     ),
                                   ),
                                 ),
@@ -435,20 +492,25 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                                       DropdownButton<String>(
                                         value: sortBy,
                                         underline: const SizedBox(),
-                                        icon: const Icon(Icons.keyboard_arrow_down),
+                                        icon: const Icon(
+                                          Icons.keyboard_arrow_down,
+                                        ),
                                         items: ['Newest', 'Oldest', 'Name']
-                                            .map((String value) {
-                                          return DropdownMenuItem<String>(
-                                            value: value,
-                                            child: Text(
-                                              value,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
+                                            .map(
+                                              (String value) =>
+                                                  DropdownMenuItem<String>(
+                                                    value: value,
+                                                    child: Text(
+                                                      value,
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                  ),
+                                            )
+                                            .toList(),
                                         onChanged: (String? newValue) {
                                           setState(() {
                                             sortBy = newValue!;
@@ -523,7 +585,8 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                             const SizedBox(height: 20),
 
                             // Address
-                            if (event != null && event?.eventDetail?.eventAddress != null)
+                            if (event != null &&
+                                event?.eventDetail?.eventAddress != null)
                               Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(16),
@@ -551,7 +614,8 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      event?.eventDetail?.eventAddress ?? 'Alamat tidak tersedia',
+                                      event?.eventDetail?.eventAddress ??
+                                          'Alamat tidak tersedia',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey[700],
@@ -565,7 +629,8 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                             const SizedBox(height: 20),
 
                             // Event Description
-                            if (event?.eventDetail != null && event?.eventDetail!.eventDescription!= null)
+                            if (event?.eventDetail != null &&
+                                event?.eventDetail!.eventDescription != null)
                               Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(16),
@@ -593,7 +658,8 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      event?.eventDetail?.eventDescription ?? 'Deskripsi tidak tersedia',
+                                      event?.eventDetail?.eventDescription ??
+                                          'Deskripsi tidak tersedia',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey[700],
@@ -606,10 +672,103 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
 
                             const SizedBox(height: 20),
 
-                            // Participants Table
-                            participants.isEmpty
+                            // ===== Session Selector: Tombol "Semua" + Dropdown =====
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(15),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  // Tombol Semua
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        selectedSession = 0;
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: selectedSession == 0
+                                            ? const Color(
+                                                0xFF9DD79D,
+                                              ).withOpacity(0.15)
+                                            : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        "Semua",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: selectedSession == 0
+                                              ? const Color(0xFF00695C)
+                                              : Colors.grey.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+
+                                  // Dropdown
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.event_available,
+                                          color: Color(0xFF00796B),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: DropdownButton<int?>(
+                                            value: selectedSession == 0
+                                                ? null
+                                                : selectedSession,
+                                            hint: const Text("Pilih Sesi"),
+                                            isExpanded: true,
+                                            underline: const SizedBox(),
+                                            items: sessionNames.entries
+                                                .map(
+                                                  (e) => DropdownMenuItem<int>(
+                                                    value: e.key,
+                                                    child: Text(
+                                                      "${e.key} — ${e.value}",
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                            onChanged: (value) {
+                                              filterBySession(value);
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // Participants Table (filtered by selectedSession)
+                            filteredParticipants.isEmpty
                                 ? _buildNoParticipants()
-                                : _buildParticipantsTable(),
+                                : _buildParticipantsTable(filteredParticipants),
 
                             const SizedBox(height: 30),
                           ],
@@ -643,7 +802,6 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Event Name
           Text(
             event?.eventName ?? 'Nama Event',
             style: const TextStyle(
@@ -653,46 +811,39 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
             ),
           ),
           const SizedBox(height: 12),
-
-          // Date and Time
           Row(
             children: [
               Icon(Icons.calendar_today, size: 18, color: Colors.grey[600]),
               const SizedBox(width: 8),
               Text(
                 _formatDate(event?.eventDetail?.dateString),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
               ),
               const SizedBox(width: 20),
               Icon(Icons.access_time, size: 18, color: Colors.grey[600]),
               const SizedBox(width: 8),
               Text(
                 event?.eventDetail?.timeString ?? 'Waktu tidak diketahui',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
               ),
             ],
           ),
           const SizedBox(height: 8),
-
-          // Type and Max Participants
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: event?.eventDetail?.paidStatus == 1 
-                      ? const Color(0xFFF3E5F5) 
+                  color: event?.eventDetail?.paidStatus == 1
+                      ? const Color(0xFFF3E5F5)
                       : const Color(0xFFE8F5E8),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: event?.eventDetail?.paidStatus == 1 
-                        ? const Color(0xFF7B1FA2) 
+                    color: event?.eventDetail?.paidStatus == 1
+                        ? const Color(0xFF7B1FA2)
                         : const Color(0xFF9DD79D),
                   ),
                 ),
@@ -700,8 +851,8 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                   event?.eventDetail?.paidStatus == 1 ? 'Berbayar' : 'Gratis',
                   style: TextStyle(
                     fontSize: 12,
-                    color: event?.eventDetail?.paidStatus == 1 
-                        ? const Color(0xFF7B1FA2) 
+                    color: event?.eventDetail?.paidStatus == 1
+                        ? const Color(0xFF7B1FA2)
                         : const Color(0xFF5AA65A),
                     fontWeight: FontWeight.w600,
                   ),
@@ -709,7 +860,10 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
               ),
               const SizedBox(width: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE3F2FD),
                   borderRadius: BorderRadius.circular(20),
@@ -740,11 +894,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.people_outline,
-            size: 60,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.people_outline, size: 60, color: Colors.grey[400]),
           const SizedBox(height: 16),
           const Text(
             'Belum ada peserta',
@@ -757,17 +907,15 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
           const SizedBox(height: 8),
           const Text(
             'Tidak ada peserta yang terdaftar di event ini',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildParticipantsTable() {
+  // Ubah _buildParticipantsTable agar menerima list yang sudah di-filter
+  Widget _buildParticipantsTable(List<Participant> displayParticipants) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(15),
@@ -807,7 +955,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                 ),
                 Expanded(
                   child: Text(
-                    'No Regist',
+                    'Email',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -817,7 +965,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                 ),
                 Expanded(
                   child: Text(
-                    'Waktu',
+                    'Sesi',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -834,13 +982,11 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: participants.length,
-            separatorBuilder: (context, index) => Divider(
-              height: 1,
-              color: Colors.grey[200],
-            ),
+            itemCount: displayParticipants.length,
+            separatorBuilder: (context, index) =>
+                Divider(height: 1, color: Colors.grey[200]),
             itemBuilder: (context, index) {
-              final participant = participants[index];
+              final participant = displayParticipants[index];
               return Container(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -858,11 +1004,8 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        participant.registered?.name ?? '-',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[700],
-                        ),
+                        participant.registered?.email ?? '-',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                       ),
                     ),
                     Expanded(
@@ -880,7 +1023,7 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
                           ),
                         ),
                         child: Text(
-                          '17:10',
+                          'Sesi ${participant.sessions}',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -902,15 +1045,12 @@ class _EventDetailFullScreenState extends State<EventDetailFullScreen> {
             child: Column(
               children: [
                 Text(
-                  'Showing data 1 to ${participants.length} of ${participants.length} entries',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  'Showing data 1 to ${displayParticipants.length} of ${participants.length} entries',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 15),
 
-                // Pagination Buttons
+                // Pagination Buttons (saat ini statis, bisa dikembangkan)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

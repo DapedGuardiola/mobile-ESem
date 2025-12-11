@@ -72,11 +72,9 @@ class EventController {
     final result = jsonDecode(response.body);
     print(result);
     final event = Event.fromJson(result['event']);
-    final participantsJson = result['participants'] as Map<String, dynamic>;
-    final participants = participantsJson.values
-        .expand(
-          (list) => (list as List).map((json) => Participant.fromJson(json)),
-        )
+    final participantsJson = result['participants'] as List;
+    final participants = participantsJson
+        .map((json) => Participant.fromJson(json))
         .toList();
     print('participant =');
     print(participants);
