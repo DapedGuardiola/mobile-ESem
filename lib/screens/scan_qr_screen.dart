@@ -30,7 +30,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
   }
 
   Future<void> _loadActiveEvents() async {
-    final result = await eventController.getActiveEvents();
+    final result = await eventController.getActiveEvents1();
     
     if (result['success'] == true) {
       setState(() {

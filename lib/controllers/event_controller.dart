@@ -5,7 +5,19 @@ import '../models/event_model.dart';
 
 class EventController {
   // Mendapatkan semua event aktif
-  Future<Map<String, dynamic>> getActiveEvents() async {
+  Future<List<Event>> getActiveEvent() async {
+    final response = await ApiService.getRequest("/events");
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      final List<dynamic> dynamicList = result["activeEvent"];
+      return dynamicList.map((json) => Event.fromJson(json)).toList();
+    } else {
+      throw Exception("Failed to load events");
+    }
+  }
+
+Future<Map<String, dynamic>> getActiveEvents1() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
@@ -50,12 +62,9 @@ class EventController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
+
       if (token == null) {
-        return {
-          'success': false,
-          'message': 'Token tidak ditemukan.',
-        };
+        return {'success': false, 'message': 'Token tidak ditemukan.'};
       }
 
       final eventData = {
@@ -70,19 +79,20 @@ class EventController {
         'status': 'upcoming',
       };
 
-      final response = await ApiService.postAuth('/events/create', eventData, token);
+      final response = await ApiService.postAuth(
+        '/events/create',
+        eventData,
+        token,
+      );
       final result = jsonDecode(response.body);
-      
+
       return {
         'success': response.statusCode == 200 || response.statusCode == 201,
         'data': result,
         'message': result['message'] ?? 'Event berhasil dibuat',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error creating event: $e',
-      };
+      return {'success': false, 'message': 'Error creating event: $e'};
     }
   }
 
@@ -91,27 +101,21 @@ class EventController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
+
       if (token == null) {
-        return {
-          'success': false,
-          'message': 'Token tidak ditemukan.',
-        };
+        return {'success': false, 'message': 'Token tidak ditemukan.'};
       }
 
       final response = await ApiService.getAuth('/events/$eventId', token);
       final result = jsonDecode(response.body);
-      
+
       return {
         'success': response.statusCode == 200,
         'data': result['data'] ?? {},
         'message': result['message'] ?? '',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 
@@ -130,12 +134,26 @@ class EventController {
     }
   }
 
+  Future<List<Event>> getComingSoonEvent() async {
+    final response = await ApiService.getRequest("/events");
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+
+      final List<dynamic> dynamicList = result["comingSoonEvent"];
+
+      return dynamicList.map((json) => Event.fromJson(json)).toList();
+    } else {
+      throw Exception("Failed to load events");
+    }
+  }
+
   // Mendapatkan semua event (untuk dropdown)
   Future<Map<String, dynamic>> getAllEvents() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
+
       if (token == null) {
         return {
           'success': false,
@@ -146,18 +164,14 @@ class EventController {
 
       final response = await ApiService.getAuth('/events', token);
       final result = jsonDecode(response.body);
-      
+
       return {
         'success': response.statusCode == 200,
         'data': result['data'] ?? [],
         'message': result['message'] ?? '',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-        'data': [],
-      };
+      return {'success': false, 'message': 'Error: $e', 'data': []};
     }
   }
 }
