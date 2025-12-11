@@ -4,20 +4,25 @@ class EventDetailModel {
   final String eventDescription;
   final String eventAddress;
   final String eventSpeaker;
-  final String registerOpenDate;
-  final String registerClosedDate;
-  final int registerStatus;
+
+  final DateTime registerOpenDate;
+  final DateTime registerClosedDate;
+
+  final bool registerStatus;
   final int totalParticipant;
-  final String date;
+
+  final DateTime date;
+
   final int eventHandler;
   final int cost;
   final int totalIncome;
-  final int paidStatus;
+  final bool paidStatus;
+
   final String dateString;
   final String timeString;
   final int registeredCount;
-  final String imageUrl;
 
+  final String imageUrl;
 
   EventDetailModel({
     required this.eventDetailId,
@@ -47,19 +52,29 @@ class EventDetailModel {
       eventDescription: json['event_description'] ?? '',
       eventAddress: json['event_address'] ?? '',
       eventSpeaker: json['event_speaker'] ?? '',
-      registerOpenDate: json['register_open_date'] ?? '',
-      registerClosedDate: json['register_closed_date'] ?? '',
-      registerStatus: json['register_status'] ?? 0,
+
+      registerOpenDate: DateTime.tryParse(json['register_open_date'] ?? '') ??
+          DateTime(1970),
+      registerClosedDate:
+          DateTime.tryParse(json['register_closed_date'] ?? '') ??
+              DateTime(1970),
+
+      registerStatus: json['register_status'] == true,
       totalParticipant: json['total_participant'] ?? 0,
-      date: json['date'] ?? '',
+
+      date: DateTime.tryParse(json['date'] ?? '') ?? DateTime(1970),
+
       eventHandler: json['event_handler'] ?? 0,
       cost: json['cost'] ?? 0,
       totalIncome: json['total_income'] ?? 0,
-      paidStatus: json['paid_status'] ?? 0,
+
+      paidStatus: json['paid_status'] == true,
+
       dateString: json['date_string'] ?? '',
       timeString: json['time_string'] ?? '',
       registeredCount: json['registered_count'] ?? 0,
-      imageUrl : json['image_url'],
+
+      imageUrl: json['image_url'] ?? '',
     );
   }
 }

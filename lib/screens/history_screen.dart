@@ -16,11 +16,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController searchController = TextEditingController();
   final EventController eventController = EventController();
   final AttendanceController attendanceController = AttendanceController();
-  
+
   bool isLoading = true;
   List<Event> allEvents = [];
   List<Event> filteredEvents = [];
-  
+
   // Untuk filtering
   String selectedFilter = 'all'; // all, today, week, month
   List<Event> todayEvents = [];
@@ -41,19 +41,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
     try {
       // Load event history
       final result = await eventController.getRecentEvent();
-        // Sort by date (newest first)
-        final events = result;
-        events.sort((a, b) {
-          final dateA = DateTime.parse(a.eventDetail!.date);
-          final dateB = DateTime.parse(b.eventDetail!.date);
-          return dateB.compareTo(dateA);
-        });
+      // Sort by date (newest first)
+      final events = result;
+      events.sort((a, b) {
+        final dateA = a.eventDetail!.date;
+        final dateB = b.eventDetail!.date;
+        return dateB.compareTo(dateA);
+      });
 
-        setState(() {
-          allEvents = events;
-          filteredEvents = events;
-          _categorizeEvents(events);
-        });
+      setState(() {
+        allEvents = events;
+        filteredEvents = events;
+        _categorizeEvents(events);
+      });
     } catch (e) {
       print('Error loading history: $e');
     } finally {
@@ -63,7 +63,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-
   void _categorizeEvents(List<Event> events) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -72,14 +71,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final monthList = <Event>[];
 
     for (final event in events) {
-      final eventDateStr = event.eventDetail?.date;
+      final eventDateStr = event.eventDetail?.dateString;
       if (eventDateStr == null) continue;
-      
+
       final eventDate = DateTime.tryParse(eventDateStr);
       if (eventDate == null) continue;
 
       final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
-      
+
       // Calculate difference in days
       final difference = eventDay.difference(today).inDays;
 
@@ -109,9 +108,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     final filtered = allEvents.where((event) {
       final name = event.eventName.toString().toLowerCase();
-      final location = event.eventDetail?.eventAddress.toString().toLowerCase() ?? '';
+      final location =
+          event.eventDetail?.eventAddress.toString().toLowerCase() ?? '';
       final searchLower = query.toLowerCase();
-      
+
       return name.contains(searchLower) || location.contains(searchLower);
     }).toList();
 
@@ -188,16 +188,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
           children: [
             // App Bar dengan Search
             _buildAppBar(),
-            
+
             // Filter Chips
             _buildFilterChips(),
-            
+
             // Content
             Expanded(
               child: isLoading
                   ? const Center(
                       child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9DD79D)),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFF9DD79D),
+                        ),
                       ),
                     )
                   : RefreshIndicator(
@@ -262,7 +264,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ],
           ),
           const SizedBox(height: 15),
-          
+
           // Search Bar
           Container(
             decoration: BoxDecoration(
@@ -336,7 +338,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
                 side: BorderSide(
-                  color: isSelected ? const Color(0xFF9DD79D) : Colors.grey[300]!,
+                  color: isSelected
+                      ? const Color(0xFF9DD79D)
+                      : Colors.grey[300]!,
                 ),
               ),
             ),
@@ -351,11 +355,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.history_toggle_off,
-            size: 80,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.history_toggle_off, size: 80, color: Colors.grey[400]),
           const SizedBox(height: 20),
           const Text(
             'Belum ada riwayat event',
@@ -371,10 +371,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             child: Text(
               'Anda belum pernah mengikuti atau membuat event',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ),
           const SizedBox(height: 20),
@@ -410,16 +407,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildEventCard(Event event) {
-    final formattedDate = event.eventDetail?.dateString ?? 'Tanggal tidak diketahui';
-    
+    final formattedDate =
+        event.eventDetail?.dateString ?? 'Tanggal tidak diketahui';
+
     final statusColor = Color(int.parse(_getStatusColor(event.eventStatus)));
     final statusText = _getStatusText(event.eventStatus);
     print('event_status =');
     print(event.eventStatus);
-    
+
     final participantCount = event.eventDetail?.totalParticipant ?? 0;
-    final currentParticipants = event.eventDetail?.totalParticipant  ?? 0;
-    final attendanceRate = participantCount > 0 
+    final currentParticipants = event.eventDetail?.totalParticipant ?? 0;
+    final attendanceRate = participantCount > 0
         ? ((currentParticipants / participantCount) * 100).round()
         : 0;
 
@@ -481,10 +479,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ],
                     ),
                     const Spacer(),
-                    
+
                     // Status badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(15),
@@ -535,7 +536,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                event.eventDetail?.timeString ?? 'Waktu tidak diketahui',
+                                event.eventDetail?.timeString ??
+                                    'Waktu tidak diketahui',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey[700],
@@ -557,7 +559,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  event.eventDetail?.eventAddress ?? 'Lokasi tidak diketahui',
+                                  event.eventDetail?.eventAddress ??
+                                      'Lokasi tidak diketahui',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey[600],
@@ -575,7 +578,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             children: [
                               // Participants
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFE3F2FD),
                                   borderRadius: BorderRadius.circular(12),
@@ -600,10 +606,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              
+
                               // Attendance Rate
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFE8F5E8),
                                   borderRadius: BorderRadius.circular(12),
@@ -640,10 +649,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => EventDetailFullScreen(
-                                        eventId: event.eventId,
-                                        showExport: true,
-                                      ),
+                                      builder: (context) =>
+                                          EventDetailFullScreen(
+                                            eventId: event.eventId,
+                                            showExport: true,
+                                          ),
                                     ),
                                   );
                                 },
@@ -668,7 +678,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              
+
                               // Export Button (only for completed events)
                               if (event.eventStatus == 'Ended')
                                 OutlinedButton(
@@ -676,7 +686,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     _showExportOptions(event.eventId);
                                   },
                                   style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Color(0xFF9DD79D)),
+                                    side: const BorderSide(
+                                      color: Color(0xFF9DD79D),
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(20),
                                     ),
@@ -773,11 +785,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
         onTap: (index) {
           setState(() => _currentIndex = index);
-          
+
           switch (index) {
             case 0:
               Navigator.pushNamedAndRemoveUntil(
-                context, '/home', (route) => false
+                context,
+                '/home',
+                (route) => false,
               );
               break;
             case 1:
@@ -802,9 +816,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         title: const Text('Export Data'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Pilih format export:'),
-          ],
+          children: [Text('Pilih format export:')],
         ),
         actions: [
           TextButton(
@@ -816,9 +828,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Navigator.pop(context);
               await _exportData(eventId, 'pdf');
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('PDF'),
           ),
           ElevatedButton(
@@ -826,9 +836,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Navigator.pop(context);
               await _exportData(eventId, 'excel');
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: const Text('Excel'),
           ),
         ],
@@ -849,8 +857,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
 
     try {
-      final result = await attendanceController.exportAttendance(eventId, format);
-      
+      final result = await attendanceController.exportAttendance(
+        eventId,
+        format,
+      );
+
       if (!mounted) return;
       Navigator.pop(context); // Tutup loading
 
@@ -861,7 +872,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Jika ada file_url, bisa ditambahkan logika untuk download
         if (result['file_url'] != null) {
           // Implement download logic here
@@ -878,16 +889,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
   }
-
 
   @override
   void dispose() {

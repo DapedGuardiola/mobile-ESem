@@ -4,25 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AttendanceController {
   // Scan QR dan simpan absensi
-  Future<Map<String, dynamic>> scanQR(String qrData, int eventId) async {
+  Future<Map<String, dynamic>> scanQR(Map<String, dynamic> data) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'Token tidak ditemukan. Silakan login ulang.',
-        };
-      }
-
-      final result = await ApiService.postAttendance(qrData, eventId, token);
+      final result = await ApiService.postAttendance("Scan", data);
       return result;
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error scanning QR: $e',
-      };
+      return {'success': false, 'message': 'Gagal menghubungi server: $e'};
     }
   }
 
@@ -31,7 +18,7 @@ class AttendanceController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
+
       if (token == null) {
         return {
           'success': false,
@@ -42,18 +29,14 @@ class AttendanceController {
 
       final response = await ApiService.getAuth('/attendance/history', token);
       final result = jsonDecode(response.body);
-      
+
       return {
         'success': response.statusCode == 200,
         'data': result['data'] ?? [],
         'message': result['message'] ?? '',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-        'data': [],
-      };
+      return {'success': false, 'message': 'Error: $e', 'data': []};
     }
   }
 
@@ -62,7 +45,7 @@ class AttendanceController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
+
       if (token == null) {
         return {
           'success': false,
@@ -71,34 +54,33 @@ class AttendanceController {
         };
       }
 
-      final response = await ApiService.getAuth('/events/$eventId/participants', token);
+      final response = await ApiService.getAuth(
+        '/events/$eventId/participants',
+        token,
+      );
       final result = jsonDecode(response.body);
-      
+
       return {
         'success': response.statusCode == 200,
         'data': result['data'] ?? [],
         'message': result['message'] ?? '',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-        'data': [],
-      };
+      return {'success': false, 'message': 'Error: $e', 'data': []};
     }
   }
 
   // Export data absensi
-  Future<Map<String, dynamic>> exportAttendance(int eventId, String format) async {
+  Future<Map<String, dynamic>> exportAttendance(
+    int eventId,
+    String format,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
+
       if (token == null) {
-        return {
-          'success': false,
-          'message': 'Token tidak ditemukan.',
-        };
+        return {'success': false, 'message': 'Token tidak ditemukan.'};
       }
 
       final response = await ApiService.getAuth(
@@ -106,7 +88,7 @@ class AttendanceController {
         token,
       );
       final result = jsonDecode(response.body);
-      
+
       return {
         'success': response.statusCode == 200,
         'data': result['data'],
@@ -114,10 +96,7 @@ class AttendanceController {
         'file_url': result['file_url'],
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 }

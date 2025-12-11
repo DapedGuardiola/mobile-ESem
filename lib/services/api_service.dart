@@ -2,23 +2,26 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = "http://127.0.0.1:8000/api";
+  static const String baseUrl = "http://esem.my.id/api";
 
   static Future<http.Response> getRequest(String endpoint) {
     return http.get(Uri.parse("$baseUrl$endpoint"));
   }
 
   static Future<http.Response> postRequest(String endpoint, Map data) {
+    final url = "$baseUrl$endpoint";
     return http.post(
       Uri.parse("$baseUrl$endpoint"),
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: {"Content-Type": "application/json"},
       body: jsonEncode(data),
     );
   }
 
-  static Future<http.Response> postAuth(String endpoint, Map data, String token) {
+  static Future<http.Response> postAuth(
+    String endpoint,
+    Map data,
+    String token,
+  ) {
     return http.post(
       Uri.parse("$baseUrl$endpoint"),
       headers: {
@@ -32,44 +35,34 @@ class ApiService {
   static Future<http.Response> getAuth(String endpoint, String token) {
     return http.get(
       Uri.parse("$baseUrl$endpoint"),
-      headers: {
-        "Authorization": "Bearer $token",
-      },
+      headers: {"Authorization": "Bearer $token"},
     );
   }
 
   // ============ FUNGSI BARU UNTUK ABSENSI ============
-  
-  static Future<Map<String, dynamic>> postAttendance(
-    String qrData, 
-    int eventId,
-    String token
-  ) async {
+
+  static Future<Map<String, dynamic>> postAttendance(String endpoint, Map<String, dynamic> data) async {
     try {
+      final url = Uri.parse("$baseUrl/$endpoint");
+
       final response = await http.post(
-        Uri.parse("$baseUrl/attendance/scan"),
+        url,
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        body: jsonEncode({
-          'qr_data': qrData,
-          'event_id': eventId,
-          'scan_time': DateTime.now().toIso8601String(),
-        }),
+        body: jsonEncode(data),
       );
 
-      final result = jsonDecode(response.body);
-      return {
-        'success': response.statusCode == 200 || response.statusCode == 201,
-        'data': result,
-        'message': result['message'] ?? 'Absensi berhasil',
-      };
+      print("📡 POST → $url");
+      print("📨 BODY → ${jsonEncode(data)}");
+      print("📥 STATUS CODE → ${response.statusCode}");
+      print("📥 RESPONSE → ${response.body}");
+
+      return jsonDecode(response.body);
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      print("❌ ERROR → $e");
+      return {'success': false, 'message': e.toString()};
     }
   }
 
@@ -78,9 +71,7 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse("$baseUrl/events/active"),
-        headers: {
-          "Authorization": "Bearer $token",
-        },
+        headers: {"Authorization": "Bearer $token"},
       );
 
       final result = jsonDecode(response.body);
@@ -90,18 +81,14 @@ class ApiService {
         'message': result['message'] ?? '',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-        'data': [],
-      };
+      return {'success': false, 'message': 'Error: $e', 'data': []};
     }
   }
 
   // Untuk membuat event baru
   static Future<Map<String, dynamic>> createEvent(
     Map<String, dynamic> eventData,
-    String token
+    String token,
   ) async {
     try {
       final response = await http.post(
@@ -120,10 +107,7 @@ class ApiService {
         'message': result['message'] ?? 'Event berhasil dibuat',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 }

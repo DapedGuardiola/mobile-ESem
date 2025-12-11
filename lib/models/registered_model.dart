@@ -4,7 +4,7 @@ class Registered {
   final String name;
   final String email;
   final String phone;
-  final int paymentStatus;
+  final bool paymentStatus;
 
   Registered({
     required this.registeredId,
@@ -19,10 +19,10 @@ class Registered {
     return Registered(
       registeredId: json['registered_id'],
       eventId: json['event_id'],
-      name: json['registered_name'],
-      email: json['registered_email'],
-      phone: json['registered_phone'],
-      paymentStatus: json['payment_status'],
+      name: json['registered_name'] ?? '',
+      email: json['registered_email'] ?? '',
+      phone: json['registered_phone'] ?? '',
+      paymentStatus: json['payment_status'] == true,
     );
   }
 

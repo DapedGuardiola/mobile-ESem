@@ -1,5 +1,4 @@
 import 'event_detail_model.dart';
-
 class Event {
   final int eventId;
   final String eventName;

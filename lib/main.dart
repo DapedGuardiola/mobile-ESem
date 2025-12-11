@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
         "/event-list": (context) => const EventListScreen(),
         "/add-planning-event": (context) => const AddPlanningEventScreen(),
         "/history": (context) => const HistoryScreen(),
-        // "/scan-qr": (context) => const ScanQRScreen(),
+        "/scan-qr": (context) => const ScanQRScreen(),
         
         // Event detail dengan parameter
         "/event-detail": (context) {
